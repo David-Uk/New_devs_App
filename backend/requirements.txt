@@ -18,7 +18,11 @@ pytz
 redis>=5.0.0
 requests
 sendgrid
-sqlalchemy>=2.0.0
+# FIX (FINDINGS.md 1.2): sqlalchemy[asyncio] pulls in greenlet, required by the
+# async engine/sessions (AsyncAdaptedQueuePool). Plain `sqlalchemy` omitted it and
+# every revenue query failed with ImportError: greenlet library is installed.
+greenlet>=3.0.0
+sqlalchemy[asyncio]>=2.0.0
 supabase
 tenacity>=8.0.0
 uvicorn[standard]

@@ -35,11 +35,15 @@ async def calculate_total_revenue(property_id: str, tenant_id: str) -> Dict[str,
     """
     Aggregates revenue from database.
 
-    FIX (FINDINGS.md 1.2): the old implementation built a new DatabasePool() per
+    FIX (FINDINGS.md 1.2 + 1.3): the old implementation built a new DatabasePool() per
     request from nonexistent settings.supabase_db_* fields, so initialization always
     failed; a bare `except` then swallowed the error and returned HARDCODED MOCK
-    revenue (and tenant-blind data) with HTTP 200. The pool URL now comes from
-    settings.database_url, the shared global pool is reused, and DB failures now
+    revenue with HTTP 200. The mock was tenant-blind (FINDINGS.md 1.3): it was keyed
+    by property_id only, so tenant-b received tenant-a's fabricated figures
+    ('prop-001' -> mock 1000.00/3 while tenant-b reality is 0.00/0, and tenant-a
+    reality is 2250.000/4). The pool URL now comes from settings.database_url, the
+    shared global pool is reused, the mock dict is deleted entirely, and all results
+    come from SQL that filters on BOTH property_id AND tenant_id - DB failures now
     propagate to the caller instead of being masked by fabricated numbers.
     """
     # FIX (FINDINGS.md 1.2): reuse the shared global pool (database_pool.db_pool)
@@ -51,8 +55,10 @@ async def calculate_total_revenue(property_id: str, tenant_id: str) -> Dict[str,
     # failure). Previously this always failed due to the supabase_db_* settings bug.
     await db_pool.initialize()
     if not db_pool.session_factory:
-        # FIX (FINDINGS.md 1.2): surface the failure loudly - no more silent fallback
-        # to the hardcoded mock_data dict that hid real revenue errors.
+        # FIX (FINDINGS.md 1.2 + 1.3): surface the failure loudly - no more silent
+        # fallback to the hardcoded mock_data dict, which both hid real revenue
+        # errors (1.2) and was keyed by property_id only, serving one tenant's
+        # fabricated figures to another (1.3).
         raise RuntimeError(
             "Database pool not available - cannot calculate revenue "
             f"(property={property_id}, tenant={tenant_id})"
